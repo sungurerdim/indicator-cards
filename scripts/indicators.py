@@ -503,6 +503,22 @@ def _ext_states():
     return S
 
 
+def to_heikin_ashi(df):
+    """Heikin Ashi transform, for the HA signal variant: states are computed
+    on the smoothed candles, forward returns ALWAYS come from real prices."""
+    o, h, l, c = (df['open'].values, df['high'].values,
+                  df['low'].values, df['close'].values)
+    hc = (o + h + l + c) / 4
+    ho = np.empty(len(c)); ho[0] = (o[0] + c[0]) / 2
+    for i in range(1, len(c)):
+        ho[i] = (ho[i-1] + hc[i-1]) / 2
+    out = df.copy()
+    out['open'] = ho; out['close'] = hc
+    out['high'] = np.maximum(h, np.maximum(ho, hc))
+    out['low'] = np.minimum(l, np.minimum(ho, hc))
+    return out
+
+
 def state_series():
     """(id, fn(df) -> (state ±1/0, continuous value)) for all 33 states."""
     S = []

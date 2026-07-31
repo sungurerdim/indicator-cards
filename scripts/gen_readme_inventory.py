@@ -34,6 +34,7 @@ d = json.load(open('data/dataset.json', encoding='utf-8'))
 inds = sorted({c['i'] for c in d['cards']})
 tfs = sorted({c['tf'] for c in d['cards']}, key=list(TF_MIN).index)
 hs = sorted({c['h'] for c in d['cards']})
+vs = d['meta'].get('variants', ['raw'])
 u = d['universe']
 meas = d['meta']['measurements']
 yrs = max(x['bars'] for x in u) * 5 / (60 * 24 * 365)
@@ -41,8 +42,9 @@ yrs = max(x['bars'] for x in u) * 5 / (60 * 24 * 365)
 scope = (f"This dataset scores the raw directional accuracy of "
          f"**{len(inds)} popular technical indicator states** on "
          f"**{len(u)} of the highest-volume Binance USDT-M perpetual futures pairs**, "
-         f"across **{len(tfs)} timeframes** ({tfs[0]} → {tfs[-1]}) and "
-         f"**{len(hs)} forecast horizons** — up to **{yrs:.0f} years** of history, "
+         f"across **{len(tfs)} timeframes** ({tfs[0]} → {tfs[-1]}), "
+         f"**{len(hs)} forecast horizons** and **{len(vs)} signal variants** "
+         f"(raw & Heikin Ashi candles) — up to **{yrs:.0f} years** of history, "
          f"**{meas:,} individual measurements**.")
 
 groups = {}
@@ -62,13 +64,16 @@ inventory = '\n'.join([
     f"everything above is an exact resample of it",
     f"- **Horizons ({len(hs)}):** {' and '.join(map(str, hs))} bars ahead "
     f"(in wall-clock time: {hor})",
+    f"- **Signal variants ({len(vs)}):** {', '.join(vs)} — the `ha` variant "
+    f"computes states on Heikin Ashi-smoothed candles; forward returns always "
+    f"come from real prices",
     f"- **Universe ({len(u)} pairs):** " + ', '.join(x['s'] for x in u),
     f"- **History:** {min(x['from'] for x in u)} → {max(x['to'] for x in u)} · "
     f"{sum(x['bars'] for x in u):,} five-minute bars · {meas:,} measurements",
 ])
 
 caveat = (f"Results are period-specific — edges decay. A few cells out of "
-          f"{len(inds)} × {len(tfs)} × {len(hs)} will look good by pure chance; "
+          f"{len(inds)} × {len(tfs)} × {len(hs)} × {len(vs)} will look good by pure chance; "
           f"judge patterns, not single cells. **This is not financial advice "
           f"and not a trading strategy.**")
 

@@ -24,7 +24,7 @@ import os
 import numpy as np
 import pandas as pd
 
-from indicators import state_series
+from indicators import state_series, to_heikin_ashi
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(BASE, 'cache')
@@ -96,11 +96,11 @@ def pmap(fn, items):
         return pool.map(_pmap_worker, items)
 
 
-def store_incremental(cfg, tasks, worker):
-    """Central incremental store build/skill.csv. Key: (symbol, tf, cfg_hash,
-    data_fp); rows already present for unchanged data are never recomputed."""
+def store_incremental(cfg, tasks, worker, store_name='skill'):
+    """Central incremental store build/<store_name>.csv. Key: (symbol, tf,
+    cfg_hash, data_fp); rows present for unchanged data are never recomputed."""
     os.makedirs(BUILD_DIR, exist_ok=True)
-    path = os.path.join(BUILD_DIR, 'skill.csv')
+    path = os.path.join(BUILD_DIR, f'{store_name}.csv')
     ch = cfg_hash(cfg)
     old = pd.read_csv(path) if os.path.exists(path) else pd.DataFrame()
     if len(old):
@@ -139,7 +139,7 @@ def store_incremental(cfg, tasks, worker):
             merged.to_csv(path, index=False)
 
 
-def run(symbols, tfs, horizon):
+def run(symbols, tfs, horizon, use_ha=False):
     from scipy.stats import spearmanr
     states = state_series()
 
@@ -151,10 +151,11 @@ def run(symbols, tfs, horizon):
         c = d['close'].values
         fwd = np.full(len(c), np.nan)
         fwd[:-horizon] = c[horizon:] / c[:-horizon] - 1
+        d_sig = to_heikin_ashi(d) if use_ha else d
         out = []
         for name, fn in states:
             try:
-                st, val = fn(d)
+                st, val = fn(d_sig)
             except Exception:
                 continue
             m = (st != 0) & ~np.isnan(fwd) & ~np.isnan(val)
@@ -168,7 +169,8 @@ def run(symbols, tfs, horizon):
         return out
 
     tasks = [(s, tf) for s in symbols for tf in tfs]
-    store_incremental({'horizon': horizon, 'n_ind': len(states)}, tasks, one)
+    store_incremental({'horizon': horizon, 'n_ind': len(states)}, tasks, one,
+                      store_name='skill_ha' if use_ha else 'skill')
 
 
 def main():
@@ -176,13 +178,15 @@ def main():
     ap.add_argument('--symbols', default='', help='comma list; default: all cached')
     ap.add_argument('--tfs', default='5m,15m,30m,1h,4h,1d')
     ap.add_argument('--horizons', default='6,24')
+    ap.add_argument('--ha', action='store_true',
+                    help='Heikin Ashi signal variant (build/skill_ha.csv)')
     args = ap.parse_args()
     symbols = args.symbols.split(',') if args.symbols else cached_symbols()
     if not symbols:
         raise SystemExit("cache/ is empty — run scripts/fetch_candles.py --universe first")
     for h in (int(x) for x in args.horizons.split(',')):
-        run(symbols, args.tfs.split(','), h)
-    print(f"Store: {os.path.join(BUILD_DIR, 'skill.csv')}")
+        run(symbols, args.tfs.split(','), h, use_ha=args.ha)
+    print(f"Store: {os.path.join(BUILD_DIR, 'skill_ha.csv' if args.ha else 'skill.csv')}")
 
 
 if __name__ == '__main__':
