@@ -131,6 +131,7 @@ background:var(--bg);transition:transform .1s}
 <p class="sub" data-i18n="tagline">Do popular technical indicators actually predict direction? We measured — with no strategy, no backtest profits, no cherry-picking. Just each indicator’s raw directional accuracy, on 50 of the highest-volume Binance futures pairs, over up to 4 years of data.</p>
 
 <div class="statstrip" id="kpis"></div>
+<div class="note" id="kpiNote" style="margin:4px 0 14px"></div>
 
 <div class="howgrid">
 <div><h2 data-i18n="h_how" style="margin-top:0">How to read this</h2>
@@ -238,6 +239,7 @@ const I18N = {
   h_win:'Group winners', h_cards:'The report cards',
   f_tf:'Timeframe', f_all:'All', f_h:'Forecast horizon', f_h24:'Long (24 bars)', f_h6:'Short (6 bars)',
   f_raw:'Raw candles', f_ha:'Heikin Ashi',
+  n_comp:'Breakdown', n_elem:'Elements', n_horizon:'horizons', n_variant:'signal variants',
   c_ind:'Indicator', c_tf:'TF', c_coins:'Coins', c_pos:'Positive', c_neg:'Negative',
   c_pct:'Positive %', c_med:'Median edge', c_det:'Details',
   p_cards:'Click “Details” on any row to see the per-coin breakdown behind that number. Sorted by the share of coins where the indicator beat a coin flip.',
@@ -284,6 +286,7 @@ const I18N = {
   h_win:'Grup kazananları', h_cards:'Karneler',
   f_tf:'Zaman dilimi', f_all:'Tümü', f_h:'Tahmin ufku', f_h24:'Uzun (24 bar)', f_h6:'Kısa (6 bar)',
   f_raw:'Ham mum', f_ha:'Heikin Ashi',
+  n_comp:'Bileşenler', n_elem:'Unsurlar', n_horizon:'ufuk', n_variant:'sinyal varyantı',
   c_ind:'Gösterge', c_tf:'TF', c_coins:'Coin', c_pos:'Pozitif', c_neg:'Negatif',
   c_pct:'Pozitif %', c_med:'Medyan kenar', c_det:'Detay',
   p_cards:'Herhangi bir satırda “Detay”ı tıklayıp o sayının arkasındaki coin-bazında dökümü görebilirsiniz. Sıralama: göstergenin yazı-turayı geçtiği coin oranına göre.',
@@ -537,6 +540,19 @@ function render(){
     [DATA.meta.coins,t('k_coins')],[DATA.meta.indicators,t('k_ind')],
     [DATA.meta.measurements.toLocaleString(),t('k_meas')],[yrs.toFixed(1),t('k_span')]
   ].map(([v,l])=>`<span class="st"><b>${v}</b><small>${l}</small></span>`).join('');
+  // Bileşen/unsur dökümü — SSOT: gömülü veriden çalışma anında sayılır
+  const sumV = v => DATA.cards.filter(c=>(c.v||'raw')===v)
+    .reduce((a,c)=>a+c.rows.length,0);
+  const rawN = sumV('raw'), haN = sumV('ha');
+  const nInd = new Set(DATA.cards.map(c=>c.i)).size;
+  const nTf = new Set(DATA.cards.map(c=>c.tf)).size;
+  const nH = new Set(DATA.cards.map(c=>c.h)).size;
+  const nV = new Set(DATA.cards.map(c=>c.v||'raw')).size;
+  document.getElementById('kpiNote').innerHTML =
+    `${t('n_comp')}: <b>${rawN.toLocaleString()}</b> ${t('f_raw').toLowerCase()} + ` +
+    `<b>${haN.toLocaleString()}</b> Heikin Ashi = <b>${(rawN+haN).toLocaleString()}</b> · ` +
+    `${t('n_elem')}: ${nInd} ${t('k_ind')} × ${nTf} TF × ${nH} ${t('n_horizon')} × ` +
+    `${nV} ${t('n_variant')} × ${DATA.meta.coins} coin`;
   document.getElementById('gen').textContent = DATA.meta.generated;
 
   // Tablo

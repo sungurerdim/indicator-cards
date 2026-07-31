@@ -42,6 +42,7 @@ This dataset scores the raw directional accuracy of **60 popular technical indic
   - *Volume-based* (6): `adl_slope`, `cmf_20`, `eom_14`, `force_13`, `obv_slope`, `vwap_pos`
 - **Timeframes (6):** 5m, 15m, 30m, 1h, 4h, 1d — 5m is the raw feed; everything above is an exact resample of it
 - **Horizons (2):** 6 and 24 bars ahead (in wall-clock time: 30m/2h @5m · 90m/6h @15m · 3h/12h @30m · 6h/1d @1h · 1d/4d @4h · 6d/24d @1d)
+- **Measurements:** 34,070 raw + 34,074 ha = 68,144 — 60 states × 6 TFs × 2 horizons × 2 variants × 50 pairs
 - **Signal variants (2):** raw, ha — the `ha` variant computes states on Heikin Ashi-smoothed candles; forward returns always come from real prices
 - **Universe (50 pairs):** 1000PEPE, 1000SHIB, AAVE, ADA, AKE, AVAX, BANK, BCH, BNB, BTC, CAP, CFX, COTI, DEXE, DOGE, ENA, EPIC, ESP, ESPORTS, ETH, EUL, FIL, GIGGLE, HYPE, INJ, KAITO, KOMA, LA, LINK, LTC, MMT, NEAR, ON, ONDO, PAXG, PUMP, RE, RIF, ROBO, SOL, SUI, TAO, UAI, UB, UNI, WLD, XAUT, XMR, XRP, ZEC
 - **History:** 2022-08-01 → 2026-07-31 · 12,923,549 five-minute bars · 68,144 measurements

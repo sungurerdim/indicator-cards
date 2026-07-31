@@ -64,6 +64,10 @@ inventory = '\n'.join([
     f"everything above is an exact resample of it",
     f"- **Horizons ({len(hs)}):** {' and '.join(map(str, hs))} bars ahead "
     f"(in wall-clock time: {hor})",
+    f"- **Measurements:** " + ' + '.join(
+        f"{sum(len(c['rows']) for c in d['cards'] if c.get('v', 'raw') == v):,} {v}"
+        for v in vs) + f" = {meas:,} — {len(inds)} states × {len(tfs)} TFs × "
+    f"{len(hs)} horizons × {len(vs)} variants × {len(u)} pairs",
     f"- **Signal variants ({len(vs)}):** {', '.join(vs)} — the `ha` variant "
     f"computes states on Heikin Ashi-smoothed candles; forward returns always "
     f"come from real prices",
