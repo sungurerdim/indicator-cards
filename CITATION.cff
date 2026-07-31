@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite it as below."
+title: "Crypto Indicator Report Cards"
+authors:
+  - family-names: "Erdim"
+    given-names: "Sungur Zahid"
+type: dataset
+license: CC-BY-4.0
+repository-code: "https://github.com/sungurerdim/indicator-cards"
+url: "https://sungurerdim.github.io/indicator-cards/"
+abstract: "P&L-free directional-accuracy report cards for popular technical
+indicators, measured on the top-50 Binance USDT-M perpetual futures pairs
+over up to four years of 5-minute-derived data."
