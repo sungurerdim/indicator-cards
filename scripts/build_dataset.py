@@ -35,6 +35,11 @@ def main():
 
     sk = pd.read_csv(STORE)
     sk['key_extra'] = sk['key_extra'].fillna('').astype(str)
+    # Artımlı store eski konfigürasyonların satırlarını da saklar; yayına her
+    # mantıksal ölçümün YALNIZ en yeni hali girer (aksi hâlde kartlarda coin
+    # başına mükerrer satır oluşur).
+    sk = sk.drop_duplicates(subset=['symbol', 'tf', 'indicator', 'key_extra'],
+                            keep='last')
     sk['sym'] = sk['symbol'].str.replace('/USDT', '', regex=False)
     cards = []
     for (ind, tf, h), g in sk.groupby(['indicator', 'tf', 'key_extra']):

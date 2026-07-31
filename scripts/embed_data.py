@@ -20,6 +20,9 @@ s = re.sub(r'(<script id="DATASET" type="application/json">).*?(</script>)',
 s, n = re.subn(r'(<meta name="description" content=").*?(">)',
                lambda m: m.group(1) + desc + m.group(2), s)
 assert n == 1, "description meta bulunamadı"
+s, n = re.subn(r'(<meta property="og:description" content=").*?(">)',
+               lambda m: m.group(1) + desc + m.group(2), s)
+assert n == 1, "og:description meta bulunamadı"
 
 # Statik (JS'siz) gövde kopyaları, sayfanın kendi i18n EN metinlerinden (tek
 # doğruluk kaynağı) token'ları veriden çözerek yeniden yazılır — idempotent:

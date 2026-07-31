@@ -17,15 +17,15 @@ def humanize(minutes):
 
 
 def group(i):
-    if re.match(r'^(ema|tema|dema|hma|zlema|vwma)_\d+_pos$', i):
+    if re.match(r'^(sma|wma|ema|tema|dema|hma|zlema|vwma|kama|t3|alma|mcginley)_\d+_pos$', i):
         return 'MA position (price vs MA)'
     if i.startswith('ema_cross_'):
         return 'MA cross'
-    if re.match(r'^(supertrend|psar|aroon|donchian)', i):
+    if re.match(r'^(supertrend|psar|aroon|donchian|ichimoku|vortex|adx_di|linreg)', i):
         return 'Trend system'
-    if re.match(r'^(rsi|roc|macd|cci|willr)', i):
+    if re.match(r'^(rsi|roc|macd|cci|willr|stoch|mfi|tsi|trix|kst|ultosc|ao$|fisher)', i):
         return 'Oscillator'
-    if i.startswith('obv'):
+    if re.match(r'^(obv|cmf|adl|force|eom|vwap)', i):
         return 'Volume-based'
     return 'Other'
 
