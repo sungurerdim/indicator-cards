@@ -14,6 +14,157 @@ supertrend_10_2p5, rsi_14_midline…); classics with fixed defaults stay bare
 import numpy as np
 import pandas as pd
 
+# --- v5 speed: optional numba fast paths -----------------------------------
+# Statement-order copies of the Python/pandas-apply loops below (fastmath
+# OFF). They are only used when numba is importable AND a byte-for-byte
+# parity gate has confirmed identical outputs (trader_ai_v2
+# scripts/parity_gate.py --signals); otherwise the reference paths run.
+import os as _os
+
+try:
+    from numba import njit as _njit
+
+    _NUMBA_OK = True
+except ImportError:
+    _NUMBA_OK = False
+
+    def _njit(*_a, **_k):
+        def deco(f):
+            return f
+
+        return deco
+
+
+USE_NUMBA = _NUMBA_OK and _os.environ.get("STRAT_NUMBA", "1") != "0"
+
+
+@_njit(cache=True, fastmath=False)
+def _st_dir_core(h, l, c, a, mult):
+    n = len(c)
+    mid = (h + l) / 2
+    ub = mid + mult * a
+    lb = mid - mult * a
+    fub = ub.copy()
+    flb = lb.copy()
+    for i in range(1, n):
+        fub[i] = ub[i] if (ub[i] < fub[i - 1] or c[i - 1] > fub[i - 1]) else fub[i - 1]
+        flb[i] = lb[i] if (lb[i] > flb[i - 1] or c[i - 1] < flb[i - 1]) else flb[i - 1]
+    d = np.ones(n)
+    for i in range(1, n):
+        if c[i] > fub[i - 1]:
+            d[i] = 1
+        elif c[i] < flb[i - 1]:
+            d[i] = -1
+        else:
+            d[i] = d[i - 1]
+    return d, fub, flb
+
+
+@_njit(cache=True, fastmath=False)
+def _psar_state_core(h, l, af, af_max):
+    n = len(h)
+    st = np.zeros(n)
+    if n < 3:
+        return st
+    up = True
+    sar = l[0]
+    ep = h[0]
+    a = af
+    for i in range(1, n):
+        sar = sar + a * (ep - sar)
+        if up:
+            sar = min(sar, l[i - 1], l[i - 2] if i >= 2 else l[i - 1])
+            if l[i] < sar:
+                up, sar, ep, a = False, ep, l[i], af
+            elif h[i] > ep:
+                ep, a = h[i], min(a + af, af_max)
+        else:
+            sar = max(sar, h[i - 1], h[i - 2] if i >= 2 else h[i - 1])
+            if h[i] > sar:
+                up, sar, ep, a = True, ep, h[i], af
+            elif l[i] < ep:
+                ep, a = l[i], min(a + af, af_max)
+        st[i] = 1 if up else -1
+    return st
+
+
+@_njit(cache=True, fastmath=False)
+def _vwap_run_core(week, tp, v):
+    n = len(v)
+    vwap = np.zeros(n)
+    v_run = np.zeros(n)
+    run_pv = 0.0
+    run_v = 0.0
+    for i in range(n):
+        if i and week[i] != week[i - 1]:
+            run_pv = 0.0
+            run_v = 0.0
+        run_pv += tp[i] * v[i]
+        run_v += v[i]
+        vwap[i] = run_pv / max(run_v, 1e-9)
+        v_run[i] = run_v
+    return vwap, v_run
+
+
+
+
+@_njit(cache=True, fastmath=False)
+def _aroon_core(x, n, up):
+    # rolling(n+1).apply(argmax|argmin) birebir: pencere içi İLK uç nokta
+    m = len(x)
+    out = np.full(m, np.nan)
+    for t in range(n, m):
+        best = 0
+        if up:
+            for j in range(1, n + 1):
+                if x[t - n + j] > x[t - n + best]:
+                    best = j
+        else:
+            for j in range(1, n + 1):
+                if x[t - n + j] < x[t - n + best]:
+                    best = j
+        out[t] = 100.0 * (float(best) / n)
+    return out
+
+
+@_njit(cache=True, fastmath=False)
+def _ha_core(o, h, l, c):
+    n = len(c)
+    hc = (o + h + l + c) / 4
+    ho = np.empty(n)
+    ho[0] = (o[0] + c[0]) / 2
+    for i in range(1, n):
+        ho[i] = (ho[i - 1] + hc[i - 1]) / 2
+    hh = np.maximum(h, np.maximum(ho, hc))
+    hl = np.minimum(l, np.minimum(ho, hc))
+    return ho, hc, hh, hl
+
+
+@_njit(cache=True, fastmath=False)
+def _fisher_core(raw):
+    n = len(raw)
+    val = np.zeros(n)
+    fish = np.zeros(n)
+    for i in range(1, n):
+        val[i] = 0.66 * raw[i] + 0.34 * val[i - 1]
+        x = min(max(val[i], -0.999), 0.999)
+        fish[i] = 0.5 * np.log((1 + x) / (1 - x)) + 0.5 * fish[i - 1]
+    return fish
+
+
+@_njit(cache=True, fastmath=False)
+def _kama_core(x, sc, sc_slow, n):
+    out = np.full(len(x), np.nan)
+    if len(x) <= n:
+        return out
+    out[n] = x[n]
+    for i in range(n + 1, len(x)):
+        s = sc[i] if np.isfinite(sc[i]) else sc_slow
+        out[i] = out[i - 1] + s * (x[i] - out[i - 1])
+    return out
+
+
+
 
 def atr(df, n=14):
     # Deliberate variant: Wilder RMA (ewm alpha=1/n), not SMA-ATR (audit 2026-08-02)
@@ -51,7 +202,10 @@ def dema(x, n):
 
 def hma(x, n):
     # Deliberate variant: final smoothing length = int(sqrt(n)) (floor), the
-    # common open implementation; not round(sqrt(n))
+    # common open implementation; not round(sqrt(n)).
+    # numba fast path was TRIED and REMOVED: np.dot's BLAS summation order is
+    # not byte-identical to a sequential loop (parity gate finding) — the
+    # pandas-apply reference stays authoritative.
     wma = lambda s, k: (
         pd.Series(s)
         .rolling(k)
@@ -93,6 +247,8 @@ def supertrend_dir(df, n=10, mult=3.0):
     # zero the first n+2 bars (_st_state), so the seed never leaks into states
     h, l, c = df["high"].values, df["low"].values, df["close"].values
     a = atr(df, n)
+    if USE_NUMBA:
+        return _st_dir_core(h, l, c, a, float(mult))[0]
     mid = (h + l) / 2
     ub, lb = mid + mult * a, mid - mult * a
     fub, flb = ub.copy(), lb.copy()
@@ -194,14 +350,24 @@ def _willr_state(d, n=14):
 
 
 def _aroon_state(d, n=25):
-    h = pd.Series(d["high"])
-    l = pd.Series(d["low"])
-    up = (
-        100 * h.rolling(n + 1).apply(lambda w: float(np.argmax(w)) / n, raw=True).values
-    )
-    dn = (
-        100 * l.rolling(n + 1).apply(lambda w: float(np.argmin(w)) / n, raw=True).values
-    )
+    if USE_NUMBA:
+        up = _aroon_core(
+            np.ascontiguousarray(d["high"].values, dtype=np.float64), n, True
+        )
+        dn = _aroon_core(
+            np.ascontiguousarray(d["low"].values, dtype=np.float64), n, False
+        )
+    else:
+        h = pd.Series(d["high"])
+        l = pd.Series(d["low"])
+        up = (
+            100
+            * h.rolling(n + 1).apply(lambda w: float(np.argmax(w)) / n, raw=True).values
+        )
+        dn = (
+            100
+            * l.rolling(n + 1).apply(lambda w: float(np.argmin(w)) / n, raw=True).values
+        )
     v = up - dn
     st = np.sign(np.nan_to_num(v))
     return st, v
@@ -221,6 +387,9 @@ def _psar_state(d, af=0.02, af_max=0.2):
     # v5 fix: standard Wilder two-bar clamp — SAR may not enter the range of
     # the previous two bars (identical code in trader_ai_v2 psar_levels)
     h, l = d["high"].values, d["low"].values
+    if USE_NUMBA:
+        st = _psar_state_core(h, l, float(af), float(af_max))
+        return st, st.astype(float)
     n = len(h)
     st = np.zeros(n)
     if n < 3:
@@ -280,6 +449,8 @@ def kama(x, n=10, fast=2, slow=30):
     er = change / np.where(vol > 0, vol, np.nan)
     sc = (er * (2 / (fast + 1) - 2 / (slow + 1)) + 2 / (slow + 1)) ** 2
     sc_slow = (2 / (slow + 1)) ** 2
+    if USE_NUMBA:
+        return _kama_core(x, np.ascontiguousarray(sc, dtype=np.float64), sc_slow, n)
     out[n] = x[n]
     for i in range(n + 1, len(x)):
         s = sc[i] if np.isfinite(sc[i]) else sc_slow
@@ -302,6 +473,8 @@ def t3(x, n=20, a=0.7):
 
 
 def mcginley(x, n=20, k=0.6):
+    # numba fast path TRIED and REMOVED: `ratio ** 4` (libm pow) is not
+    # byte-identical across implementations (parity gate finding)
     x = np.asarray(x, float)
     out = np.full(len(x), np.nan)
     if not len(x):
@@ -514,12 +687,15 @@ def _fisher_state(d, n=9):
     mx = pd.Series(mp).rolling(n).max().values
     raw = 2 * ((mp - mn) / np.where((mx - mn) > 0, mx - mn, np.nan) - 0.5)
     raw = np.clip(np.nan_to_num(raw), -0.999, 0.999)
-    val = np.zeros(len(mp))
-    fish = np.zeros(len(mp))
-    for i in range(1, len(mp)):
-        val[i] = 0.66 * raw[i] + 0.34 * val[i - 1]
-        x = np.clip(val[i], -0.999, 0.999)
-        fish[i] = 0.5 * np.log((1 + x) / (1 - x)) + 0.5 * fish[i - 1]
+    if USE_NUMBA:
+        fish = _fisher_core(np.ascontiguousarray(raw, dtype=np.float64))
+    else:
+        val = np.zeros(len(mp))
+        fish = np.zeros(len(mp))
+        for i in range(1, len(mp)):
+            val[i] = 0.66 * raw[i] + 0.34 * val[i - 1]
+            x = np.clip(val[i], -0.999, 0.999)
+            fish[i] = 0.5 * np.log((1 + x) / (1 - x)) + 0.5 * fish[i - 1]
     st = np.sign(fish)
     st[:n] = 0
     return st, fish
@@ -591,16 +767,23 @@ def _vwap_pos_state(d):
     week = ts // (7 * 86400_000)
     tp = (d["high"].values + d["low"].values + d["close"].values) / 3
     v = d["volume"].values
-    vwap = np.zeros(len(v))
-    v_run = np.zeros(len(v))
-    run_pv = run_v = 0.0
-    for i in range(len(v)):
-        if i and week[i] != week[i - 1]:
-            run_pv = run_v = 0.0
-        run_pv += tp[i] * v[i]
-        run_v += v[i]
-        vwap[i] = run_pv / max(run_v, 1e-9)
-        v_run[i] = run_v
+    if USE_NUMBA:
+        vwap, v_run = _vwap_run_core(
+            np.ascontiguousarray(week, dtype=np.int64),
+            np.ascontiguousarray(tp, dtype=np.float64),
+            np.ascontiguousarray(v, dtype=np.float64),
+        )
+    else:
+        vwap = np.zeros(len(v))
+        v_run = np.zeros(len(v))
+        run_pv = run_v = 0.0
+        for i in range(len(v)):
+            if i and week[i] != week[i - 1]:
+                run_pv = run_v = 0.0
+            run_pv += tp[i] * v[i]
+            run_v += v[i]
+            vwap[i] = run_pv / max(run_v, 1e-9)
+            v_run[i] = run_v
     c = d["close"].values
     val = np.where(v_run > 0, (c - vwap) / np.where(vwap > 0, vwap, np.nan), np.nan)
     st = np.sign(np.nan_to_num(val))
@@ -655,16 +838,21 @@ def to_heikin_ashi(df):
         df["low"].values,
         df["close"].values,
     )
-    hc = (o + h + l + c) / 4
-    ho = np.empty(len(c))
-    ho[0] = (o[0] + c[0]) / 2
-    for i in range(1, len(c)):
-        ho[i] = (ho[i - 1] + hc[i - 1]) / 2
+    if USE_NUMBA:
+        ho, hc, hh_, hl_ = _ha_core(o, h, l, c)
+    else:
+        hc = (o + h + l + c) / 4
+        ho = np.empty(len(c))
+        ho[0] = (o[0] + c[0]) / 2
+        for i in range(1, len(c)):
+            ho[i] = (ho[i - 1] + hc[i - 1]) / 2
+        hh_ = np.maximum(h, np.maximum(ho, hc))
+        hl_ = np.minimum(l, np.minimum(ho, hc))
     out = df.copy()
     out["open"] = ho
     out["close"] = hc
-    out["high"] = np.maximum(h, np.maximum(ho, hc))
-    out["low"] = np.minimum(l, np.minimum(ho, hc))
+    out["high"] = hh_
+    out["low"] = hl_
     return out
 
 

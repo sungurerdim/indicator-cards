@@ -1,0 +1,4 @@
+[lint.per-file-ignores]
+# OHLC idiom: h, l, c are deliberate short names throughout the indicator
+# math; the wma lambda predates this config and matches the published dataset
+"scripts/indicators.py" = ["E741", "E731"]
